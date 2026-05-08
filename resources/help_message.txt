@@ -1,0 +1,20 @@
+/tex指令目前支持typst渲染，TeX因沙盒化不便暂时下线，因开发中更多细节无可奉告，群聊使用须at。下为一例，at后粘贴可用：
+
+/tex #show: tag.with("lxgw", 14pt, "a4h")
+= Smoke中文 — tag
+中文*加粗*与_强调_行距。
+Block math:
+$ integral_0^1 x dif x $
+Inline $a + b$。
+`tag` 函数自动分派预设名到对应 `setup` 参数。
+/tex 在经典电动力学中，真空中的麦克斯韦方程组（Maxwell's equations）可以用微分形式优雅地表达。在三维矢量分析的标准形式下，电场 $bold(E)$ 与磁场 $bold(B)$ 满足以下关系：
+$ nabla dot bold(E) &= rho / epsilon_0 \
+  nabla dot bold(B) &= 0 \
+  nabla times bold(E) &= - (partial bold(B)) / (partial t) \
+  nabla times bold(B) &= mu_0 bold(J) + mu_0 epsilon_0 (partial bold(E)) / (partial t) $
+其中 $epsilon_0$ 和 $mu_0$ 分别代表真空电容率与真空磁导率，且光速 $c$ 满足关系 $c = 1 / sqrt(epsilon_0 mu_0)$。方程组的右侧包含了电荷密度 $rho$ 与电流密度 $bold(J)$。
+若从微分几何的视角来审视，我们可以引入电磁张量 $F$。将其视为四维时空流形上的二阶微分形式，它可以通过四维电磁势 $A$ 的外微分（Exterior derivative）来表示，即 $F = d A$。在此协变框架下，无源的麦克斯韦方程组自然地等价于比安基恒等式（Bianchi identity），直接由外微分的幂零性 $d^2 = 0$ 导出：
+$ d F = 0 $
+而含源的动力学方程则需要引入度规，并利用霍奇星算子（Hodge star operator） $star$ 紧凑地写为：
+$ d star F = star J $
+这里 $J$ 是与四维电流密度对应的微分形式。这种流形上的几何表达不仅在物理含义上更为深刻，同时在排版测试中，也能有效检验渲染引擎对多行等号对齐、行内符号间距、以及特殊算符（如偏导数和外微分符号）的处理精度。
