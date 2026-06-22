@@ -1,13 +1,14 @@
-/tex指令目前支持typst渲染，TeX因沙盒化不便暂时下线，因开发中更多细节无可奉告，群聊使用须at。下为一例，at后粘贴可用：
+/typd 指令目前支持typst渲染，TeX因沙盒化不便暂时下线，因开发中更多细节无可奉告，群聊使用须at。下为一例，at后粘贴可用：
 
-/tex #show: tag.with("lxgw", 14pt, "a4h")
+/typd #show: tag.with("lxgw", 14pt, "a4h")
 = Smoke中文 — tag
 中文*加粗*与_强调_行距。
 Block math:
 $ integral_0^1 x dif x $
 Inline $a + b$。
 `tag` 函数自动分派预设名到对应 `setup` 参数。
-/tex 在经典电动力学中，真空中的麦克斯韦方程组（Maxwell's equations）可以用微分形式优雅地表达。在三维矢量分析的标准形式下，电场 $bold(E)$ 与磁场 $bold(B)$ 满足以下关系：
+
+在经典电动力学中，真空中的麦克斯韦方程组（Maxwell's equations）可以用微分形式优雅地表达。在三维矢量分析的标准形式下，电场 $bold(E)$ 与磁场 $bold(B)$ 满足以下关系：
 $ nabla dot bold(E) &= rho / epsilon_0 \
   nabla dot bold(B) &= 0 \
   nabla times bold(E) &= - (partial bold(B)) / (partial t) \
