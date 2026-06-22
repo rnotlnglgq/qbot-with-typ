@@ -52,19 +52,7 @@ async fn load_help_message(topic: Option<&str>) -> String {
     };
     let path = format!("{HELP_MESSAGES_DIR}/{filename}");
     match tokio::fs::read_to_string(&path).await {
-        Ok(s) => {
-            let s = s.trim().to_string();
-            if s.is_empty() {
-                if topic == Some("example") {
-                    "例文暂未提供。".to_string()
-                } else {
-                    warn!(path = %path, "帮助文案为空");
-                    "帮助文案暂不可用。".to_string()
-                }
-            } else {
-                s
-            }
-        }
+        Ok(s) => s.trim().to_string(),
         Err(e) => {
             warn!(path = %path, error = %e, "读取 /help 文案失败，回退为简短提示");
             "帮助文案暂不可用。".to_string()
