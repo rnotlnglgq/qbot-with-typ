@@ -3,7 +3,7 @@
 在QQ中输入反斜杠即可调出，快速补全指令和所需的at。（如果你输入反斜杠出现的是表情列表，需要调整QQ设置）
 
 简例：
-/typd wauto
+/typd wauto,
 $sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1))))))))))))))))))))))))))))))))))))))))))$
 
 使用 /help tag 指令了解如何快捷设置页面。

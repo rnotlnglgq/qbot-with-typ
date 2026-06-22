@@ -39,6 +39,11 @@ fn help_message_filename(topic: Option<&str>) -> Option<&'static str> {
     }
 }
 
+/// 取已 trim 消息的第一个空白分隔 token，用于识别 `/tex 1+1` 等带参命令。
+fn command_head(text: &str) -> &str {
+    text.split_whitespace().next().unwrap_or("")
+}
+
 /// 从 `resources/help-messages/` 读取 `/help [topic]` 文案；运行时可修改无需重启。
 async fn load_help_message(topic: Option<&str>) -> String {
     let Some(filename) = help_message_filename(topic) else {
@@ -112,7 +117,7 @@ async fn process_command(pool: &WorkerPool, text: &str) -> Option<CommandOutcome
             }
         }
     } else {
-        match text {
+        match command_head(text) {
             "/about" => {
                 debug!("匹配到 /about 命令");
                 Some(CommandOutcome::Text(
@@ -330,35 +335,57 @@ fn format_tag_with_arg(token: &str) -> String {
     }
 }
 
-/// 按首个 `\n` 拆成首行与剩余正文；`\n` 为单字节，切片位置合法。
-/// 首行若以 `\r\n` 结尾则剥掉 `\r`。
-/// 剩余部分为 `None` 表示原文不含换行；`Some("")` 表示首行后紧跟换行但无后续正文。
+/// 按物理首行拆分；`lines()` / `split_once` 处理 `\r\n`。
 fn split_first_line(source: &str) -> (&str, Option<&str>) {
-    match source.find('\n') {
-        Some(i) => {
-            let first_line = source[..i].strip_suffix('\r').unwrap_or(&source[..i]);
-            (first_line, Some(&source[i + 1..]))
-        }
+    match source.split_once('\n') {
+        Some((first, rest)) => (first.strip_suffix('\r').unwrap_or(first), Some(rest)),
         None => (source, None),
     }
 }
 
-/// 若首行为逗号分隔的可见 ASCII 标记列表，则改写为 `#show: tag.with(...)`。
-fn rewrite_tag_shorthand(source: &str) -> String {
-    let (first_line, rest) = split_first_line(source);
-
+/// 解析 tag 简写行；`None` 表示不应改写。
+/// 末尾逗号表示简写（允许单 tag）；split 后末段空白则剥掉。
+fn parse_tag_shorthand_line(first_line: &str) -> Option<Vec<String>> {
     if !first_line.contains(',') {
-        return source.to_string();
+        return None;
     }
 
-    let tokens: Vec<String> = first_line
+    let mut tokens: Vec<String> = first_line
         .split(',')
         .map(str::trim)
         .map(str::to_string)
         .collect();
+
+    if tokens.last().is_some_and(String::is_empty) {
+        tokens.pop();
+    }
+
+    if tokens.is_empty() {
+        return None;
+    }
+
+    if tokens.len() == 1 && !first_line.trim_end().ends_with(',') {
+        return None;
+    }
+
     if tokens.iter().any(String::is_empty) || !tokens.iter().all(|t| is_tag_shorthand_token(t)) {
+        return None;
+    }
+
+    Some(tokens)
+}
+
+/// 仅当物理首行是 tag 简写时改写为 `#show: tag.with(...)`；否则原文不变。
+fn rewrite_tag_shorthand(source: &str) -> String {
+    let (first_line, rest) = split_first_line(source);
+
+    if first_line.trim().is_empty() {
         return source.to_string();
     }
+
+    let Some(tokens) = parse_tag_shorthand_line(first_line) else {
+        return source.to_string();
+    };
 
     let args = tokens
         .iter()
@@ -376,6 +403,36 @@ fn rewrite_tag_shorthand(source: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_tag_requires_trailing_comma_for_single_token() {
+        assert_eq!(parse_tag_shorthand_line("lxgw"), None);
+        assert_eq!(
+            parse_tag_shorthand_line("lxgw,"),
+            Some(vec!["lxgw".to_string()])
+        );
+    }
+
+    #[test]
+    fn parse_tag_allows_multiple_tokens_without_trailing_comma() {
+        assert_eq!(
+            parse_tag_shorthand_line("a1, bbb"),
+            Some(vec!["a1".to_string(), "bbb".to_string()])
+        );
+    }
+
+    #[test]
+    fn parse_tag_rejects_internal_empty_segment() {
+        assert_eq!(parse_tag_shorthand_line("a1,,bbb"), None);
+    }
+
+    #[test]
+    fn split_first_line_handles_crlf() {
+        assert_eq!(
+            split_first_line("a1, bbb\r\n= Title"),
+            ("a1, bbb", Some("= Title"))
+        );
+    }
 
     #[test]
     fn rewrite_tag_shorthand_expands_comma_list() {
@@ -424,6 +481,36 @@ mod tests {
         assert_eq!(rewrite_tag_shorthand(input), input);
     }
 
+    /// 物理首行为空时，后续行即使像 tag 也不改写
+    #[test]
+    fn rewrite_tag_shorthand_blank_first_line_then_comma_line_is_not_tag() {
+        let input = "\n\nlxgw, a4h\n= Title";
+        assert_eq!(rewrite_tag_shorthand(input), input);
+    }
+
+    #[test]
+    fn rewrite_tag_shorthand_blank_line_then_word_is_not_tag() {
+        let input = "\n\nlxgw\n= Title";
+        assert_eq!(rewrite_tag_shorthand(input), input);
+    }
+
+    /// tag 在物理首行时，正文行可含逗号
+    #[test]
+    fn rewrite_tag_shorthand_body_line_may_contain_comma() {
+        assert_eq!(
+            rewrite_tag_shorthand("lxgw,\nHello, world"),
+            "#show: tag.with(\"lxgw\")\nHello, world"
+        );
+    }
+
+    #[test]
+    fn rewrite_tag_shorthand_expands_single_tag_with_trailing_comma() {
+        assert_eq!(
+            rewrite_tag_shorthand("lxgw,\n= Title"),
+            "#show: tag.with(\"lxgw\")\n= Title"
+        );
+    }
+
     #[test]
     fn rewrite_tag_shorthand_skips_utf8_on_first_line() {
         let input = "中文, bbb\n= Title";
@@ -463,6 +550,16 @@ mod tests {
     }
 
     #[test]
+    fn command_head_ignores_trailing_args_and_extra_whitespace() {
+        assert_eq!(command_head("/tex"), "/tex");
+        assert_eq!(command_head("/tex 1+1"), "/tex");
+        assert_eq!(command_head("/tex\t  1+1"), "/tex");
+        assert_eq!(command_head("/about   "), "/about");
+        assert_eq!(command_head("/typm foo bar"), "/typm");
+        assert_eq!(command_head("hello"), "hello");
+    }
+
+    #[test]
     fn help_message_filename_maps_known_topics() {
         assert_eq!(help_message_filename(None), Some("help.txt"));
         assert_eq!(help_message_filename(Some("tag")), Some("help_tag.txt"));
@@ -473,19 +570,5 @@ mod tests {
     #[test]
     fn help_message_filename_rejects_unknown_topic() {
         assert_eq!(help_message_filename(Some("foo")), None);
-    }
-
-    #[test]
-    fn split_first_line_strips_cr_before_lf() {
-        assert_eq!(
-            split_first_line("a1, bbb\r\nrest"),
-            ("a1, bbb", Some("rest"))
-        );
-    }
-
-    #[test]
-    fn split_first_line_distinguishes_no_newline_from_trailing_newline() {
-        assert_eq!(split_first_line("a1, bbb"), ("a1, bbb", None));
-        assert_eq!(split_first_line("a1, bbb\n"), ("a1, bbb", Some("")));
     }
 }
