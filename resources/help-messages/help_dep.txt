@@ -1,0 +1,9 @@
+目前的导言区为：
+
+#import "@preview/cetz:0.5.2"
+#import "@preview/fletcher:0.5.8": diagram, node, edge
+#import "@preview/physica:0.9.8": *
+#import "@preview/outrageous:0.4.1"
+#import "@preview/showybox:2.0.4": showybox
+
+#import "@local/quiconf:0.0.1": tag, tag-registry, setup

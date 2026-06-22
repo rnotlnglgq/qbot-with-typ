@@ -1,0 +1,41 @@
+# 用首行关键词进行快速设定
+
+用法：/typd 首行写逗号分隔的 tag，换行后是正文。
+例：
+```
+/typd lxgw, 14pt, a4h
+some正文
+```
+等价于
+```
+/typd tag.with("lxgw", 14pt, "a4h")
+some正文
+```
+
+# 关键词用途一览
+
+带星号的为当前默认值
+
+## 西文字体
+lm : Latin Modern 系列*
+
+## 中文字体
+noto : Noto CJK*
+lxgw : 霞鹜系列
+
+## 页面
+wauto : 自适应
+w20 : 固定宽度20em
+w30 : 固定宽度20em
+w40 : 固定宽度40em*
+a4 : A4纵向
+a4h : A4横向
+a5 : A5纵向
+a5h : A5横向
+
+## 文档
+zhcn : 简体中文排版相关设定*
+
+## 其它
+indentfirst : 首行缩进（默认关）
+14pt : 数字开头的长度设字号

@@ -26,73 +26,42 @@ fn char_prefix(s: &str, max_chars: usize) -> String {
     s.chars().take(max_chars).collect() //姑且不管字素簇
 }
 
-const HELP_MESSAGE_PATH: &str = "resources/help_message.txt";
+const HELP_MESSAGES_DIR: &str = "resources/help-messages";
 
-/// 可见 ASCII（不含空格），用于 tag 简写首行各段的字符校验。
-fn is_visible_ascii_token(s: &str) -> bool {
-    !s.is_empty()
-        && s.bytes().all(|b| (0x21..=0x7E).contains(&b))
-}
-
-/// 将 tag 简写中的一个参数格式化为 `tag.with(...)` 内的片段。
-fn format_tag_with_arg(token: &str) -> String {
-    debug_assert!(is_visible_ascii_token(token));
-    if token.as_bytes()[0].is_ascii_digit() {
-        token.to_string()
-    } else {
-        format!("\"{}\"", token)
+/// 将 `/help [topic]` 的 topic 映射到 `resources/help-messages/` 下的文件名。
+fn help_message_filename(topic: Option<&str>) -> Option<&'static str> {
+    match topic {
+        None => Some("help.txt"),
+        Some("tag") => Some("help_tag.txt"),
+        Some("dep") => Some("help_dep.txt"),
+        Some("example") => Some("help_example.txt"),
+        Some(_) => None,
     }
 }
 
-/// 按首个 `\n` 拆成首行与剩余正文；`\n` 为单字节，切片位置合法。
-/// 首行若以 `\r\n` 结尾则剥掉 `\r`。
-/// 剩余部分为 `None` 表示原文不含换行；`Some("")` 表示首行后紧跟换行但无后续正文。
-fn split_first_line(source: &str) -> (&str, Option<&str>) {
-    match source.find('\n') {
-        Some(i) => {
-            let first_line = source[..i].strip_suffix('\r').unwrap_or(&source[..i]);
-            (first_line, Some(&source[i + 1..]))
+/// 从 `resources/help-messages/` 读取 `/help [topic]` 文案；运行时可修改无需重启。
+async fn load_help_message(topic: Option<&str>) -> String {
+    let Some(filename) = help_message_filename(topic) else {
+        warn!(topic = ?topic, "未知 /help 主题");
+        return "未知帮助主题，可用：tag、dep、example".to_string();
+    };
+    let path = format!("{HELP_MESSAGES_DIR}/{filename}");
+    match tokio::fs::read_to_string(&path).await {
+        Ok(s) => {
+            let s = s.trim().to_string();
+            if s.is_empty() {
+                if topic == Some("example") {
+                    "例文暂未提供。".to_string()
+                } else {
+                    warn!(path = %path, "帮助文案为空");
+                    "帮助文案暂不可用。".to_string()
+                }
+            } else {
+                s
+            }
         }
-        None => (source, None),
-    }
-}
-
-/// 若首行为逗号分隔的可见 ASCII 标记列表，则改写为 `#show: tag.with(...)`。
-fn rewrite_tag_shorthand(source: &str) -> String {
-    let (first_line, rest) = split_first_line(source);
-
-    if !first_line.contains(',') {
-        return source.to_string();
-    }
-
-    let tokens: Vec<String> = first_line
-        .split(',')
-        .map(str::trim)
-        .map(str::to_string)
-        .collect();
-    if tokens.iter().any(String::is_empty) || !tokens.iter().all(|t| is_visible_ascii_token(t)) {
-        return source.to_string();
-    }
-
-    let args = tokens
-        .iter()
-        .map(|t| format_tag_with_arg(t))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let rewritten = format!("#show: tag.with({args})");
-
-    match rest {
-        None => rewritten,
-        Some(rest) => format!("{rewritten}\n{rest}"),
-    }
-}
-
-/// 从 `resources/help_message.txt` 读取 `/help` 文案；运行时可修改无需重启。
-async fn load_help_message() -> String {
-    match tokio::fs::read_to_string(HELP_MESSAGE_PATH).await {
-        Ok(s) => s.trim().to_string(),
         Err(e) => {
-            warn!(path = HELP_MESSAGE_PATH, error = %e, "读取 /help 文案失败，回退为简短提示");
+            warn!(path = %path, error = %e, "读取 /help 文案失败，回退为简短提示");
             "帮助文案暂不可用。".to_string()
         }
     }
@@ -100,6 +69,17 @@ async fn load_help_message() -> String {
 
 /// 处理命令文本；`None` 表示不需回复。
 async fn process_command(pool: &WorkerPool, text: &str) -> Option<CommandOutcome> {
+    if text == "/help" || text.starts_with("/help ") {
+        let topic = text.strip_prefix("/help").unwrap_or("").trim();
+        let topic = if topic.is_empty() {
+            None
+        } else {
+            Some(topic)
+        };
+        debug!(?topic, "匹配到 /help 命令");
+        return Some(CommandOutcome::Text(load_help_message(topic).await));
+    }
+
     if text.starts_with("/typd") {
         let source = text.trim_start_matches("/typd").trim();
         debug!(
@@ -133,10 +113,6 @@ async fn process_command(pool: &WorkerPool, text: &str) -> Option<CommandOutcome
         }
     } else {
         match text {
-            "/help" => {
-                debug!("匹配到 /help 命令");
-                Some(CommandOutcome::Text(load_help_message().await))
-            }
             "/about" => {
                 debug!("匹配到 /about 命令");
                 Some(CommandOutcome::Text(
@@ -331,6 +307,72 @@ pub async fn run_bot(
     Ok(())
 }
 
+
+// ======== Tag shorthand
+
+/// tag 简写 token 允许的单个字符：拉丁字母、数字，以及嵌入 Typst 字符串/长度时无需转义的 `-`、`_`、`.`。
+fn is_tag_shorthand_token_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')
+}
+
+/// tag 简写首行各段须为非空，且仅含 [`is_tag_shorthand_token_char`] 允许的字符。
+fn is_tag_shorthand_token(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(is_tag_shorthand_token_char)
+}
+
+/// 将 tag 简写中的一个参数格式化为 `tag.with(...)` 内的片段。
+fn format_tag_with_arg(token: &str) -> String {
+    debug_assert!(is_tag_shorthand_token(token));
+    if token.as_bytes()[0].is_ascii_digit() {
+        token.to_string()
+    } else {
+        format!("\"{}\"", token)
+    }
+}
+
+/// 按首个 `\n` 拆成首行与剩余正文；`\n` 为单字节，切片位置合法。
+/// 首行若以 `\r\n` 结尾则剥掉 `\r`。
+/// 剩余部分为 `None` 表示原文不含换行；`Some("")` 表示首行后紧跟换行但无后续正文。
+fn split_first_line(source: &str) -> (&str, Option<&str>) {
+    match source.find('\n') {
+        Some(i) => {
+            let first_line = source[..i].strip_suffix('\r').unwrap_or(&source[..i]);
+            (first_line, Some(&source[i + 1..]))
+        }
+        None => (source, None),
+    }
+}
+
+/// 若首行为逗号分隔的可见 ASCII 标记列表，则改写为 `#show: tag.with(...)`。
+fn rewrite_tag_shorthand(source: &str) -> String {
+    let (first_line, rest) = split_first_line(source);
+
+    if !first_line.contains(',') {
+        return source.to_string();
+    }
+
+    let tokens: Vec<String> = first_line
+        .split(',')
+        .map(str::trim)
+        .map(str::to_string)
+        .collect();
+    if tokens.iter().any(String::is_empty) || !tokens.iter().all(|t| is_tag_shorthand_token(t)) {
+        return source.to_string();
+    }
+
+    let args = tokens
+        .iter()
+        .map(|t| format_tag_with_arg(t))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let rewritten = format!("#show: tag.with({args})");
+
+    match rest {
+        None => rewritten,
+        Some(rest) => format!("{rewritten}\n{rest}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -389,9 +431,48 @@ mod tests {
     }
 
     #[test]
+    fn rewrite_tag_shorthand_expands_decimal_length() {
+        assert_eq!(
+            rewrite_tag_shorthand("lxgw, 1.5pt\n= Title"),
+            "#show: tag.with(\"lxgw\", 1.5pt)\n= Title"
+        );
+    }
+
+    #[test]
+    fn rewrite_tag_shorthand_skips_token_with_quote() {
+        let input = "a\"1, bbb";
+        assert_eq!(rewrite_tag_shorthand(input), input);
+    }
+
+    #[test]
+    fn rewrite_tag_shorthand_skips_token_with_backslash() {
+        let input = r"a\1, bbb";
+        assert_eq!(rewrite_tag_shorthand(input), input);
+    }
+
+    #[test]
+    fn rewrite_tag_shorthand_skips_token_with_typst_syntax_char() {
+        let input = "a1, #foo";
+        assert_eq!(rewrite_tag_shorthand(input), input);
+    }
+
+    #[test]
     fn rewrite_tag_shorthand_skips_empty_segment() {
         let input = "a1,,bbb";
         assert_eq!(rewrite_tag_shorthand(input), input);
+    }
+
+    #[test]
+    fn help_message_filename_maps_known_topics() {
+        assert_eq!(help_message_filename(None), Some("help.txt"));
+        assert_eq!(help_message_filename(Some("tag")), Some("help_tag.txt"));
+        assert_eq!(help_message_filename(Some("dep")), Some("help_dep.txt"));
+        assert_eq!(help_message_filename(Some("example")), Some("help_example.txt"));
+    }
+
+    #[test]
+    fn help_message_filename_rejects_unknown_topic() {
+        assert_eq!(help_message_filename(Some("foo")), None);
     }
 
     #[test]

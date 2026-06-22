@@ -1,0 +1,11 @@
+目前仅支持 /typd 指令进行 Typst 渲染。 TeX 因沙盒化不便暂时下线，因开发中更多细节无可奉告，群聊使用须at。
+
+在QQ中输入反斜杠即可调出，快速补全指令和所需的at。（如果你输入反斜杠出现的是表情列表，需要调整QQ设置）
+
+简例：
+/typd wauto
+$sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1+sqrt(1))))))))))))))))))))))))))))))))))))))))))$
+
+使用 /help tag 指令了解如何快捷设置页面。
+使用 /help dep 指令查看支持的包。
+使用 /help example 指令查看另一例文。
